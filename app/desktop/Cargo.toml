@@ -1,0 +1,15 @@
+[package]
+name = "yt2midi"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Turn falling-notes piano videos into MIDI and an easy-to-read sheet"
+authors = ["Gabriel Dornelles"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+yt2midi-core = { path = "../core" }
+dirs = "5"

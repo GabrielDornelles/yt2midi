@@ -1,0 +1,8 @@
+[workspace]
+members = ["core", "desktop"]
+resolver = "2"
+
+[profile.release]
+lto = "thin"
+codegen-units = 4
+opt-level = 3

@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+node_modules/
+frontend/dist/
+work/
+server.log
+nohup.out
+*.pyc
+frontend/public/samples/
+
+app/target/

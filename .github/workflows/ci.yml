@@ -1,0 +1,62 @@
+# Checks every pull request and every push to the main branches: the tests on Linux, and that the Windows build still compiles.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
+      - name: Piano samples
+        run: ./scripts/fetch-piano.sh
+      - name: Web page
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Tests
+        working-directory: app
+        run: cargo test --release
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app
+      - name: Piano samples
+        shell: bash
+        run: ./scripts/fetch-piano.sh
+      - name: Web page
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: It compiles
+        working-directory: app
+        run: cargo check --workspace --release

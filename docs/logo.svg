@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 32 32" role="img" aria-label="yt2midi">
+  <rect width="32" height="32" rx="8" fill="#b85c2e"/>
+  <path d="M8 7h4v12H8zM14 7h4v12h-4zM20 7h4v12h-4z" fill="#fffdf9"/>
+  <path d="M10 7h2v9h-2zM16 7h2v9h-2zM22 7h2v9h-2z" fill="#2d2620"/>
+</svg>

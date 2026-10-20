@@ -1,0 +1,51 @@
+[package]
+name = "yt2midi-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "yt2midi engine: video -> MIDI -> easy sheet. Used by the desktop app and the headless server."
+
+[lib]
+name = "yt2midi_core"
+path = "src/lib.rs"
+
+[[bin]]
+name = "yt2midi-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.8", features = ["macros"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "fs", "io-util", "net", "sync", "time"] }
+tokio-util = { version = "0.7", features = ["io"] }
+futures-util = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rayon = "1"
+rust-embed = { version = "8", features = ["mime-guess"] }
+mime_guess = "2"
+tiny-skia = "0.11"
+ttf-parser = "0.25"
+png = "0.17"
+flate2 = "1"
+midly = "0.5"
+jpeg-encoder = "0.6"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+ureq = "2"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+dirs = "5"
+uuid = { version = "1", features = ["v4"] }
+regex = "1"
+percent-encoding = "2"
+log = "0.4"
+env_logger = "0.11"
+
+cpal = "0.15"
+symphonia = { version = "0.5", default-features = false, features = ["mp3"] }
+
+[target.'cfg(unix)'.dependencies]
+# unpacking the ffmpeg download on Linux (tar.xz); Windows gets a zip
+xz2 = { version = "0.1", features = ["static"] }
+tar = "0.4"
+
+[dev-dependencies]
+tempfile = "3"

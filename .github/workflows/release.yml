@@ -1,0 +1,81 @@
+# Builds the installers and attaches them to a GitHub release.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# One job per system: a .deb on Linux, an installer (.exe) on Windows. The release is created as a draft, so
+# nothing is public until you have looked at the files and pressed "Publish". It can also be started by hand from the Actions tab.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: deb
+          - os: windows-latest
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app
+
+      - name: Linux build packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libasound2-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev patchelf
+
+      - name: Piano samples (Salamander Grand Piano, CC BY 3.0)
+        shell: bash
+        run: ./scripts/fetch-piano.sh
+
+      - name: Build the web page that goes inside the program
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Tauri command line
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app/desktop
+          tauriScript: cargo tauri
+          args: --bundles ${{ matrix.bundles }}
+          tagName: ${{ github.ref_name }}
+          releaseName: yt2midi ${{ github.ref_name }}
+          releaseBody: |
+            **yt2midi** turns a YouTube piano video into MIDI and sheet music. No AI, no calibration, runs on an ordinary computer.
+
+            ## Install
+
+            - **Windows:** download the `.exe` installer and run it. Windows may say the publisher is unknown, because the installer is not code-signed yet: choose *More info*, then *Run anyway*.
+            - **Debian / Ubuntu:** `sudo apt install ./yt2midi_*_amd64.deb` (it brings `ffmpeg` with it).
+
+            The first time you make a sheet, the app also downloads `yt-dlp` (and, on Windows, `ffmpeg`) once. Nothing else leaves your computer.
+          releaseDraft: true
+          prerelease: false
