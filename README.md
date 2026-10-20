@@ -11,6 +11,7 @@ No calibration wizard, no transcribing by hand. The only thing you choose is how
 ![Tauri](https://img.shields.io/badge/Tauri-2-24c8db?logo=tauri&logoColor=white)
 ![React](https://img.shields.io/badge/React-TypeScript-3178c6?logo=react&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-555)
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![No AI](https://img.shields.io/badge/AI-none%20%E2%80%94%20plain%20maths-2d7d46)
 ![Status](https://img.shields.io/badge/status-early%20but%20usable-e08e5a)
 
@@ -223,6 +224,10 @@ Built on the shoulders of [yt-dlp](https://github.com/yt-dlp/yt-dlp), [FFmpeg](h
 [Verovio](https://www.verovio.org) (LGPL-3.0, sheet music engraving), [midly](https://github.com/kovaxis/midly), [tiny-skia](https://github.com/RazrFalcon/tiny-skia),
 [cpal](https://github.com/RustAudio/cpal), [symphonia](https://github.com/pdeljanov/Symphonia) and [Vite](https://vitejs.dev).
 Piano sound: the [Salamander Grand Piano](https://sfzinstruments.github.io/pianos/salamander/) by Alexander Holm (CC BY 3.0).
+
+## License
+
+[MIT](LICENSE). The libraries and the piano samples listed in Credits keep their own licenses.
 
 ## A note on videos
 
