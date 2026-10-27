@@ -11,6 +11,7 @@ import type { Pose } from './hands'
  */
 
 type V = [number, number, number]
+const smooth = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c) }
 const lerp = (a: V, b: V, k: number): V => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]
 
 export const KEY_CM = 2.35 // width of a white key
@@ -21,7 +22,7 @@ interface Digit { L: number[]; r: number[]; root: V }
 // right hand, x towards the little finger, y towards the fingertips, z up; origin: the middle of the wrist
 const DIGIT: Digit[] = [
   { L: [], r: [], root: [0, 0, 0] },
-  { L: [3.6, 3.0, 2.3], r: [1.05, 0.98, 0.86], root: [-2.6, 2.4, 0.1] }, // thumb: its first bone is the metacarpal
+  { L: [3.6, 3.0, 2.3], r: [1.05, 0.98, 0.86], root: [-2.6, 3.2, 0.1] }, // thumb: its first bone is the metacarpal
   { L: [4.2, 2.4, 1.9], r: [0.98, 0.88, 0.78], root: [-3.0, 9.3, 2.7] },
   { L: [4.7, 2.9, 2.1], r: [1.0, 0.9, 0.8], root: [-1.0, 9.8, 3.0] },
   { L: [4.3, 2.7, 2.0], r: [0.94, 0.84, 0.74], root: [1.0, 9.3, 2.8] },
@@ -96,7 +97,6 @@ export function drawHand(g: CanvasRenderingContext2D, p: Pose, kw: number, front
   const cs = Math.cos(yaw), sn = Math.sin(yaw)
   const W: V = [wx, wy, wz]
   const toWorld = (l: V): V => { const x = l[0] * dir; return [W[0] + x * cs - l[1] * sn, W[1] + x * sn + l[1] * cs, W[2] + l[2]] }
-  const turn = (x: number, y: number): [number, number] => [x * cs - y * sn, x * sn + y * cs]
 
   // ---- where each fingertip wants to be
   const whiteY = 4.6, blackY = keysCm * 0.38 + 2.4
@@ -104,18 +104,18 @@ export function drawHand(g: CanvasRenderingContext2D, p: Pose, kw: number, front
   for (let f = 1; f <= 5; f++) {
     const d = DIGIT[f], thumb = f === 1
     const root = toWorld(d.root)
-    // resting: a loosely curled finger just above the keys, the thumb lower and near the front edge
-    let rest: V
-    if (thumb) { const [ox, oy] = turn(dir * -2.4, 4.6); rest = [root[0] + ox, root[1] + oy, 1.0] }
-    else { const [ox, oy] = turn(dir * (f - 3) * 0.5, 6.1 - (f === 5 ? 0.6 : 0)); rest = [root[0] + ox, root[1] + oy, 1.7 + (f === 5 ? 0.2 : 0)] }
+    // neutral: every finger hovers, loosely curled, just above the keys it is over; the thumb lies relaxed beside the
+    // index finger, a little behind the other tips. Playing only lowers a finger onto its key.
+    const rest: V = thumb ? toWorld([-5.0, 10.6, 1.5]) : toWorld([d.root[0] + (f - 3) * 0.5, d.root[1] + 5.9 - (f === 5 ? 0.6 : 0), 1.7 + (f === 5 ? 0.2 : 0)])
     const tip = p.fingers[f]
     let target = rest, press = 0
     if (tip) {
       press = tip.press
       const black = isBlack(tip.midi)
-      const key: V = [tip.x * KEY_CM, black ? blackY : whiteY, black ? 2.1 : 0.9]
-      target = lerp(rest, key, press)
-      target[2] += 1.3 * Math.sin(Math.PI * press) * (press < 1 ? 1 : 0) // a finger comes down onto its key in an arc
+      const key: V = [tip.x * KEY_CM, black ? (thumb ? Math.min(blackY, 4) : blackY) : thumb ? 0.8 : whiteY, black ? 2.1 : 0.9]
+      // the finger first moves over its key at hover height, then goes down onto it
+      const over = smooth(press / 0.6), down = smooth((press - 0.45) / 0.55)
+      target = [key[0], rest[1] + (key[1] - rest[1]) * over, rest[2] + (key[2] - rest[2]) * down]
     }
     digits.push({ pts: reach(root, target, d.L, thumb, Math.atan2(cs, -sn)), thumb, r: d.r, press })
   }

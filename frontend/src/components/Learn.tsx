@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { get } from '../lib/api'
-import { buildSteps, pickSection, rungs, type First, type Step, type Window, type WindowKind } from '../lib/learn'
+import { buildSteps, pickSection, rungs, type First, type Section, type Step, type Window, type WindowKind } from '../lib/learn'
 import type { LearnPlan, NoteRec, Rgb } from '../types'
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -30,6 +30,7 @@ export function useLesson(videoId: string, notes: NoteRec[], pos: number, aim: n
   const setFirst = (f: First) => { setFirstState(f); try { localStorage.setItem('learnFirst', f) } catch { /* not remembered */ } }
 
   const [steps, setSteps] = useState<Step[] | null>(null)
+  const [running, setRunning] = useState<Section | null>(null) // the section being learned
   const [cur, setCur] = useState(0)
   const [rung, setRung] = useState(0)
 
@@ -38,14 +39,23 @@ export function useLesson(videoId: string, notes: NoteRec[], pos: number, aim: n
   const step = steps ? steps[Math.min(cur, steps.length - 1)] : null
   const speeds = step ? rungs(step, aim) : []
 
-  const start = () => { if (preview.length) { setSteps(preview); setCur(0); setRung(0) } }
-  const exit = () => { setSteps(null); setCur(0); setRung(0) }
+  const begin = (sec: Section | null) => {
+    const st = sec ? buildSteps(sec, first) : []
+    if (!sec || !st.length) return false
+    setRunning(sec); setSteps(st); setCur(0); setRung(0)
+    return true
+  }
+  const start = () => { begin(section) }
+  const exit = () => { setSteps(null); setRunning(null); setCur(0); setRung(0) }
+  /** The next chapter: the same amount of music, starting where this section ends. */
+  const hasNext = !!(plan && running && pickSection(plan, running.to + 0.02, win))
+  const nextChapter = () => { if (plan && running && !begin(pickSection(plan, running.to + 0.02, win))) exit() }
   const go = (i: number) => { if (steps) { setCur(Math.max(0, Math.min(steps.length - 1, i))); setRung(0) } }
   /** "I've got it": a notch faster, and on to the next step after the last notch. */
-  const gotIt = () => { if (!step) return; if (rung + 1 < speeds.length) setRung(rung + 1); else if (cur + 1 < steps!.length) go(cur + 1); else exit() }
+  const gotIt = () => { if (!step) return; if (rung + 1 < speeds.length) setRung(rung + 1); else if (cur + 1 < steps!.length) go(cur + 1); else if (hasNext) nextChapter(); else exit() }
   const again = () => setRung(Math.max(0, rung - 1))
 
-  return { plan, failed, win, setWin, first, setFirst, section, preview, steps, step, cur, rung, speeds, running: !!step, start, exit, go, gotIt, again }
+  return { plan, failed, win, setWin, first, setFirst, section, preview, steps, step, cur, rung, speeds, running: !!step, hasNext, nextChapter, start, exit, go, gotIt, again }
 }
 export type Lesson = ReturnType<typeof useLesson>
 
@@ -69,6 +79,7 @@ export function LessonBar({ lesson, passes, playing, onToggle }: { lesson: Lesso
         <b>{step.title}</b>
         <span className="hint">{step.tag} · step {cur + 1} of {steps.length}</span>
         <span className="grow" />
+        <button className="btn small" onClick={lesson.nextChapter} disabled={!lesson.hasNext} title="Leave this section and start the next one">Next chapter</button>
         <button className="btn small" onClick={lesson.exit}>Stop lesson</button>
       </div>
       <p className="hint lesson-sub">{step.sub}</p>
@@ -81,7 +92,7 @@ export function LessonBar({ lesson, passes, playing, onToggle }: { lesson: Lesso
         <span className="hint">played {passes} {passes === 1 ? 'time' : 'times'}</span>
         <span className="grow" />
         <button className="btn small" onClick={lesson.again} disabled={rung === 0}>Slower</button>
-        <button className="btn small primary" onClick={lesson.gotIt}>{rung + 1 < speeds.length ? 'Got it, faster' : cur + 1 < steps.length ? 'Got it, next' : 'Got it, finish'}</button>
+        <button className="btn small primary" onClick={lesson.gotIt}>{rung + 1 < speeds.length ? 'Got it, faster' : cur + 1 < steps.length ? 'Got it, next' : lesson.hasNext ? 'Got it, next chapter' : 'Got it, finish'}</button>
         <button className="btn small" onClick={() => lesson.go(cur - 1)} disabled={cur === 0}>Back</button>
         <button className="btn small" onClick={() => lesson.go(cur + 1)} disabled={cur + 1 >= steps.length}>Skip</button>
       </div>
@@ -98,6 +109,7 @@ export function LearnCard({ lesson, pos, colors, idx }: { lesson: Lesson; pos: n
       <div className="card pad learn">
         <h2>Your lesson</h2>
         <p className="hint">{steps.length} steps. Tap one to jump to it.</p>
+        <button className="btn small" onClick={lesson.nextChapter} disabled={!lesson.hasNext}>Next chapter</button>
         <ol className="outline">
           {steps.map((s, i) => (
             <li key={s.id}><button className={`step ${i === lesson.cur ? 'on' : i < lesson.cur ? 'done' : ''}`} onClick={() => lesson.go(i)}>{s.title}<small>{s.kind === 'seam' ? 'the turn' : s.kind === 'join' ? 'join' : s.kind === 'cell' ? 'pattern' : ''}</small></button></li>

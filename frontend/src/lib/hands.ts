@@ -14,7 +14,7 @@ const centre = (m: number) => (isBlack(m) ? whiteIndex(m) : whiteIndex(m) + 0.5)
 
 const SPREAD = 0.95 // white keys between neighbouring fingers of a relaxed hand
 const TOGETHER = 0.06
-const REACH = 0.28 // seconds before a note that its finger starts moving over
+const REACH = 0.34 // seconds before a note that its finger starts moving over
 
 interface Ev { t: number; at: number } // when, and where the hand's middle finger rests (in white keys)
 
@@ -82,11 +82,11 @@ export function poseAt(s: Side, t: number): Pose | null {
     if (n.start > t) {
       if (rank[f] === 2) continue
       const u = smooth(1 - (n.start - t) / REACH)
-      fingers[f] = { x: rest + (centre(n.midi) - rest) * u, press: u, midi: n.midi }
+      fingers[f] = { x: rest + (centre(n.midi) - rest) * smooth(u * 1.7), press: u, midi: n.midi } // over the key first, then down
       rank[f] = 2
     } else if (t - n.end < RELEASE && rank[f] < 2) {
       const r = smooth((t - n.end) / RELEASE)
-      fingers[f] = { x: centre(n.midi) + (rest - centre(n.midi)) * r, press: 1 - r, midi: n.midi }
+      fingers[f] = { x: centre(n.midi) + (rest - centre(n.midi)) * smooth((r - 0.3) / 0.7), press: 1 - r, midi: n.midi } // up first, then back
       rank[f] = 1
     }
   }
