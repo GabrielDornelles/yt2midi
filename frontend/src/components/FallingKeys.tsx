@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { NoteRec, Rgb } from '../types'
-import { buildSides, drawHand, poseAt, type Side } from '../lib/hands'
+import { buildSides, poseAt, type Side } from '../lib/hands'
+import { drawHand } from '../lib/handModel'
 
 /*
  * The whole piano (88 keys, always the same size) with the music falling onto it from above, the way the original
@@ -63,7 +64,7 @@ export function FallingKeys({ notes, colors, on, hands, playing, pos, getPos }: 
     g.clearRect(0, 0, w, h)
     const now = L.playing ? L.getPos() : L.pos
     const kw = w / N_WHITE
-    const handH = L.hands ? kw * 3.6 : 0 // room under the keys for the palms
+    const handH = L.hands ? kw * 5.4 : 0 // room under the keys for the palms
     const keysH = Math.max(64, Math.min((h - handH) * 0.3, kw * 7))
     const top = h - handH - keysH
     const pal = L.colors.length ? L.colors : FALLBACK
@@ -133,7 +134,7 @@ export function FallingKeys({ notes, colors, on, hands, playing, pos, getPos }: 
       for (const s of sides) {
         if (!shown(s.hand)) continue
         const p = poseAt(s, now)
-        if (p) drawHand(g, p, kw, top + keysH + kw * 0.35, top + keysH * 0.78, top + keysH * 0.34, th.v)
+        if (p) drawHand(g, p, kw, top + keysH, keysH, w / 2, th.v)
       }
     }
   }
