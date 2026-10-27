@@ -46,6 +46,10 @@ async function loadBank(ctx: AudioContext): Promise<Sample[]> {
   return bank.sort((a, b) => a.midi - b.midi)
 }
 
+/** A section played again and again: the notes in [from, until) are heard, and it starts over at `restart`. */
+export interface Region { from: number; until: number; restart: number }
+const LEAD = 1.2 // seconds (of the clock) the notes fall before a section starts
+
 /** How to play: how fast, and how loud each hand is (0 = silent). */
 export interface Playback { speed: number; gains: [number, number] }
 export const PLAIN: Playback = { speed: 1, gains: [1, 1] }
@@ -66,6 +70,10 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
   const lastSync = useRef(0)
   const pb = useRef(playback)
   pb.current = playback
+  const region = useRef<Region | null>(null)
+  const playRef = useRef<((t: number) => Promise<void>) | null>(null)
+  const gen = useRef(0) // a newer start of playback cancels an older one that is still waiting
+  const [passes, setPasses] = useState(0)
   // t0: the clock time at which the song would have been at 0 at the current speed, so song time = (clock - t0) * speed
   const st = useRef({ t0: 0, speed: 1, idx: 0, raf: 0, playing: false, offset: 0, shown: 0 })
 
@@ -154,16 +162,19 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
       }
     }
     // notes are scheduled about a second (of song time) ahead on the audio clock, so a busy page never makes them late
+    const r = region.current
     while (!native.current && c && s.idx < sorted.length && sorted[s.idx].start < now + 1) {
       const n = sorted[s.idx++]
       const gain = pb.current.gains[n.hand] ?? 1
       const when = s.t0 + n.start / s.speed
+      if (r && (n.start < r.from - 0.02 || n.start >= r.until)) continue
       if (gain > 0 && when > c.currentTime - 0.05 && master.current) {
         const at = Math.max(when, c.currentTime)
         if (bank.current) sampled(c, master.current, n, at, bank.current, gain)
         else synth(c, master.current, n, at, gain)
       }
     }
+    if (r && now >= r.restart) { setPasses((p) => p + 1); void playRef.current?.(Math.max(0, r.from - LEAD * s.speed)); return }
     // the screen follows at ~20 fps
     const t = performance.now()
     if (t - s.shown >= 50) { s.shown = t; setPos(now) }
@@ -186,19 +197,23 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
     const first = sorted.length ? sorted[0].start : 0
     const from = wanted < first - 0.6 ? Math.max(0, first - 0.6) : wanted
     if (nativeChecked.current) await nativeChecked.current
+    const my = ++gen.current
     const s = st.current
     cancelAnimationFrame(s.raf)
     const { speed, gains } = pb.current
     s.speed = speed
+    const r = region.current
     if (native.current) {
       let at = from
-      try { at = (await post<{ pos: number }>('/api/audio/play', { video_id: videoId, from, speed, gains })).pos } catch { /* keep going silently */ }
+      try { at = (await post<{ pos: number }>('/api/audio/play', { video_id: videoId, from, speed, gains, ...(r ? { silent_until: r.from - 0.02, until: r.until } : {}) })).pos } catch { /* keep going silently */ }
+      if (my !== gen.current) return
       s.t0 = performance.now() / 1000 - at / speed
       lastSync.current = performance.now()
     } else {
       const c = getCtx()
       await c.resume()
       if (bankReady.current) await bankReady.current // a no-op once loaded; first press waits for the piano
+      if (my !== gen.current) return
       newMaster(c)
       s.t0 = c.currentTime - from / speed
       s.idx = sorted.findIndex((n) => n.start >= from - 0.02)
@@ -211,7 +226,10 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sorted, tick, videoId])
 
+  playRef.current = play
+
   const pause = useCallback(() => {
+    gen.current++
     const s = st.current
     s.offset = songTime()
     s.playing = false
@@ -223,7 +241,20 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const toggle = useCallback(() => (playing ? pause() : void play(st.current.offset)), [playing, pause, play])
+  const toggle = useCallback(() => {
+    if (playing) pause()
+    else if (region.current) void play(Math.max(0, region.current.from - LEAD * pb.current.speed))
+    else void play(st.current.offset)
+  }, [playing, pause, play])
+
+  /** Loop a section (null goes back to playing the whole song). With `go`, it starts right away. */
+  const setRegion = useCallback((r: Region | null, go = false) => {
+    region.current = r
+    setPasses(0)
+    if (r) { st.current.offset = Math.max(0, r.from - LEAD * pb.current.speed); setPos(st.current.offset) }
+    if (go && r) void play(Math.max(0, r.from - LEAD * pb.current.speed))
+    else if (!r && st.current.playing) pause()
+  }, [play, pause])
   const seek = useCallback((t: number) => {
     const clamped = Math.max(0, Math.min(duration, t))
     st.current.offset = clamped
@@ -266,5 +297,5 @@ export function usePlayer(notes: NoteRec[], videoId?: string, playback: Playback
   /** Where the music is right now: smooth, unlike `pos`, which updates about 20 times a second. */
   const getPos = useCallback(() => (st.current.playing ? songTime() : st.current.offset), [])
 
-  return { playing, pos, getPos, duration, toggle, seek, playFrom, sound }
+  return { playing, pos, getPos, duration, toggle, seek, playFrom, sound, setRegion, passes }
 }

@@ -8,6 +8,7 @@ pub mod downloader;
 pub mod export;
 pub mod fingering;
 pub mod keyboard;
+pub mod learn;
 pub mod midi;
 pub mod score;
 pub mod server;

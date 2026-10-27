@@ -317,3 +317,31 @@ details.more > .stack { margin-top: 12px; }
 }
 
 .score-paper .label, .score-print .label { display: none; }
+
+/* ───────────── learning a section ───────────── */
+.learn h2 { margin: 0 0 4px; }
+.learn-row { display: flex; align-items: center; gap: 8px; }
+.learn-row label { font-size: 13px; font-weight: 600; color: var(--ink-2); min-width: 78px; }
+.learn-row input, .learn-row select { font: inherit; padding: 6px 8px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); }
+.learn-row input { width: 64px; }
+.parts h3 { font-size: 13px; margin: 8px 0 4px; display: flex; align-items: center; gap: 6px; }
+.part { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 4px 0; border-top: 1px solid var(--line); }
+.part span { font-family: ui-monospace, monospace; color: var(--muted); text-align: right; word-break: break-word; }
+.outline { list-style: none; margin: 8px 0 0; padding: 0; max-height: 52vh; overflow: auto; }
+.step { width: 100%; text-align: left; display: flex; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 0; background: none; color: var(--ink-2); border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+.step small { color: var(--muted); }
+.step.done { color: var(--muted); text-decoration: line-through; }
+.step.on { background: var(--accent-soft); color: var(--ink); font-weight: 700; }
+.lesson-bar { margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); }
+.lesson-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lesson-sub { margin: 4px 0 6px; }
+.fingers { display: flex; flex-wrap: wrap; gap: 4px; font-family: ui-monospace, monospace; font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.fingers > div { width: 100%; }
+.fing { min-width: 24px; text-align: center; padding: 2px 6px; border-radius: 6px; background: var(--bg-2); }
+.fing.chord { background: var(--accent-soft); }
+.fing.turn { margin-left: 14px; box-shadow: -8px 0 0 -6px var(--accent); }
+.lesson-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rungs { display: inline-flex; gap: 4px; }
+.rung { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--bg-2); color: var(--muted); }
+.rung.on { background: var(--accent); color: var(--accent-ink); }
+.rung.done { color: var(--good); }

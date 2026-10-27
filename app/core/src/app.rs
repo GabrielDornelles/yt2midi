@@ -255,6 +255,19 @@ impl State {
         Ok(Value::Array(v))
     }
 
+    /// How to learn the song: its chunks for each hand, and the phrases where both hands start afresh.
+    pub fn song_chunks(&self, vid: &str) -> ApiRes<crate::learn::Plan> {
+        let v = self.song_notes_fingered(vid)?;
+        let notes: Vec<crate::learn::Nt> = v.as_array().into_iter().flatten().map(|n| crate::learn::Nt {
+            midi: n["midi"].as_i64().unwrap_or(60) as i32,
+            start: n["start"].as_f64().unwrap_or(0.0),
+            end: n["end"].as_f64().unwrap_or(0.0),
+            finger: n["finger"].as_u64().unwrap_or(0) as u8,
+            right: n["right"].as_bool().unwrap_or(true),
+        }).collect();
+        Ok(crate::learn::plan(&notes))
+    }
+
     pub fn title(&self, vid: &str) -> String {
         read_json(&self.work.join(vid).join("meta.json")).and_then(|m| m["title"].as_str().map(str::to_string)).unwrap_or_else(|| vid.to_string())
     }

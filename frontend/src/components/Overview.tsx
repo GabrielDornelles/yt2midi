@@ -6,6 +6,7 @@ import { FallingKeys } from './FallingKeys'
 import type { NoteRec, Song } from '../types'
 import { Alert, Download, Pause, Play, Swap } from './icons'
 import { PianoRoll } from './PianoRoll'
+import { handIndexes, LearnCard, LessonBar, useLesson } from './Learn'
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
@@ -26,9 +27,25 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
   useEffect(() => { try { localStorage.setItem(`speed:${song.video_id}`, String(speed)); localStorage.setItem(`hands:${song.video_id}`, JSON.stringify(handOn)) } catch { /* not remembered */ } }, [speed, handOn, song.video_id])
   const [hands, setHands] = useState(() => { try { return localStorage.getItem('showHands') !== '0' } catch { return true } })
   useEffect(() => { try { localStorage.setItem('showHands', hands ? '1' : '0') } catch { /* not remembered */ } }, [hands])
-  const playback = useMemo(() => ({ speed: speed / 100, gains: [handOn[0] ? 1 : 0, handOn[1] ? 1 : 0] as [number, number] }), [speed, handOn])
+  // learning a section: the lesson decides the speed and which hands play while it runs; the speed above is what it aims for
+  const [lessonPos, setLessonPos] = useState(0)
+  const lesson = useLesson(song.video_id, list, lessonPos, speed)
+  const idx = useMemo(() => handIndexes(list), [list])
+  const shownSpeed = lesson.step ? lesson.speeds[lesson.rung] : speed
+  const shownHands = useMemo<[boolean, boolean]>(() => {
+    if (!lesson.step) return handOn
+    const on: [boolean, boolean] = [false, false]
+    if (lesson.step.hands.right) on[idx.right] = true
+    if (lesson.step.hands.left) on[idx.left] = true
+    return on
+  }, [lesson.step, handOn, idx])
+  const playback = useMemo(() => ({ speed: shownSpeed / 100, gains: [shownHands[0] ? 1 : 0, shownHands[1] ? 1 : 0] as [number, number] }), [shownSpeed, shownHands])
   const player = usePlayer(list, song.video_id, playback)
   const colors = useMemo(() => song.hand_colors ?? [], [song.hand_colors])
+  useEffect(() => { if (!lesson.running) setLessonPos(player.pos) }, [player.pos, lesson.running])
+  const stepId = lesson.step?.id
+  useEffect(() => { if (lesson.step) player.setRegion(lesson.step.region, true) }, [stepId, lesson.rung]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!lesson.running) player.setRegion(null) }, [lesson.running]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // label hands by the pitch they play, which is clearer than "hand 1 / hand 2"
   const labels = useMemo(() => {
@@ -86,7 +103,7 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
                 <span className="time">{mmss(player.pos)} / {mmss(player.duration)}</span>
                 <span className="grow" />
                 <span className="speedbox">
-                  <label htmlFor="speed">Speed {speed}%</label>
+                  <label htmlFor="speed">{lesson.running ? 'Aim' : 'Speed'} {speed}%</label>
                   <input id="speed" type="range" min={25} max={100} step={5} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
                   {[50, 75, 100].map((v) => <button key={v} className={`btn small ${speed === v ? 'primary' : ''}`} onClick={() => setSpeed(v)}>{v}</button>)}
                 </span>
@@ -95,18 +112,19 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
               </div>
               <div className="player handrow" role="group" aria-label="Hands">
                 {colors.map((c, i) => (
-                  <button key={i} className={`btn small hand-toggle ${handOn[i === 1 ? 1 : 0] ? '' : 'off'}`} aria-pressed={handOn[i === 1 ? 1 : 0]}
+                  <button key={i} className={`btn small hand-toggle ${shownHands[i === 1 ? 1 : 0] ? '' : 'off'}`} aria-pressed={shownHands[i === 1 ? 1 : 0]} disabled={lesson.running}
                     onClick={() => setHandOn((h) => (i === 1 ? [h[0], !h[1]] : [!h[0], h[1]]))}>
-                    <span className="dot" style={{ background: `rgb(${c})` }} /> {labels[i]}: {handOn[i === 1 ? 1 : 0] ? 'on' : 'off'}
+                    <span className="dot" style={{ background: `rgb(${c})` }} /> {labels[i]}: {shownHands[i === 1 ? 1 : 0] ? 'on' : 'off'}
                   </button>
                 ))}
                 <span className="hint grow">
                   {player.sound === 'loading' ? 'Loading the piano sound…' : player.sound === 'synth' ? 'Piano samples unavailable, using a simple tone.' : 'Slow it down or switch a hand off to learn a hard part.'}
                 </span>
               </div>
-              <div className="slim"><PianoRoll notes={list} colors={colors} duration={player.duration} pos={player.pos} onSeek={player.seek} /></div>
+              <LessonBar lesson={lesson} passes={player.passes} playing={player.playing} onToggle={player.toggle} />
+              <div className="slim"><PianoRoll notes={list} colors={colors} duration={player.duration} pos={player.pos} onSeek={lesson.running ? () => undefined : player.seek} /></div>
               </div>
-              <FallingKeys notes={list} colors={colors} on={handOn} hands={hands} playing={player.playing} pos={player.pos} getPos={player.getPos} />
+              <FallingKeys notes={list} colors={colors} on={shownHands} hands={hands} focus={lesson.step?.region ?? null} playing={player.playing} pos={player.pos} getPos={player.getPos} />
             </div>
           )}
         </div>
@@ -123,6 +141,7 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
       </div>
 
       <div className="side">
+        <LearnCard lesson={lesson} pos={lessonPos} colors={colors} idx={idx} />
         <div className="card pad stack">
           <div>
             <h2>Your music</h2>

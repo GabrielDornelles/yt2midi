@@ -19,10 +19,10 @@ pub struct In {
 }
 
 /// Notes within this many seconds start together (rolled chords are close enough to count as one).
-const TOGETHER: f64 = 0.06;
+pub const TOGETHER: f64 = 0.06;
 
 /// Semitones from the thumb's key to each finger's key in a relaxed hand.
-const HOME: [f64; 6] = [0.0, 0.0, 1.9, 3.8, 5.7, 7.6];
+pub const HOME: [f64; 6] = [0.0, 0.0, 1.9, 3.8, 5.7, 7.6];
 
 /// Furthest apart two fingers (a < b) reach in a chord: (comfortable, practical), in semitones.
 fn reach(a: usize, b: usize) -> (f64, f64) {

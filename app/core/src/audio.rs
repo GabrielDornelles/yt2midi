@@ -21,11 +21,15 @@ pub struct PlayOpts {
     pub from: f64,
     pub speed: f64,
     pub gains: [f32; 2],
+    /// notes that start before this are not played (a lead-in that is only seen)
+    pub silent_until: f64,
+    /// notes that start at or after this are not played (the end of a section that is looped)
+    pub until: f64,
 }
 
 impl Default for PlayOpts {
     fn default() -> Self {
-        PlayOpts { from: 0.0, speed: 1.0, gains: [1.0, 1.0] }
+        PlayOpts { from: 0.0, speed: 1.0, gains: [1.0, 1.0], silent_until: f64::NEG_INFINITY, until: f64::INFINITY }
     }
 }
 
@@ -73,6 +77,8 @@ struct Shared {
     bank: Vec<Sample>,
     speed: f64,
     gains: [f32; 2],
+    silent_until: f64,
+    until: f64,
 }
 
 pub struct Audio {
@@ -138,7 +144,7 @@ fn tick(sh: &mut Shared) {
         let ev = sh.events[sh.next].clone();
         sh.next += 1;
         let gain = sh.gains.get(ev.hand.max(0) as usize).copied().unwrap_or(1.0);
-        if sh.bank.is_empty() || ev.start < now - 0.05 || gain <= 0.0 {
+        if sh.bank.is_empty() || ev.start < now - 0.05 || gain <= 0.0 || ev.start < sh.silent_until || ev.start >= sh.until {
             continue;
         }
         let best = sh.bank.iter().min_by_key(|s| (s.midi - ev.midi).abs()).unwrap();
@@ -277,6 +283,8 @@ fn start(s: &mut Shared, notes: Vec<NoteEv>, o: &PlayOpts) {
     s.t = 0.0;
     s.speed = clamp_speed(o.speed);
     s.gains = o.gains;
+    s.silent_until = o.silent_until;
+    s.until = o.until;
     s.playing = true;
 }
 
@@ -359,6 +367,20 @@ mod tests {
         assert_eq!(sh.voices.len(), 1, "only the first hand's note at 0.0 sounds");
         run(&mut sh, 1.0);
         assert_eq!(sh.next, 4, "the muted hand's notes were skipped, not stuck");
+    }
+
+    #[test]
+    fn a_section_can_have_a_silent_lead_in_and_an_end() {
+        let notes = [(0.0, 0), (1.0, 0), (2.0, 0), (3.0, 0)];
+        let mut sh = rig(&notes, PlayOpts { silent_until: 1.0, until: 3.0, ..Default::default() });
+        let mut started = 0;
+        for _ in 0..(4.0 * 48000.0) as usize {
+            let before = sh.voices.len();
+            let mut out = [0.0f32; 1];
+            fill(&mut sh, &mut out, 1);
+            if sh.voices.len() > before { started += 1 }
+        }
+        assert_eq!(started, 2, "only the notes at 1 s and 2 s sound");
     }
 
     #[test]

@@ -134,7 +134,7 @@ struct AudioOpts {
 
 impl AudioOpts {
     fn play(&self, from: f64) -> crate::audio::PlayOpts {
-        crate::audio::PlayOpts { from, speed: self.speed, gains: self.gains }
+        crate::audio::PlayOpts { from, speed: self.speed, gains: self.gains, ..Default::default() }
     }
     fn live(&self) -> crate::audio::Live {
         crate::audio::Live { speed: self.speed, gains: self.gains }
@@ -146,6 +146,9 @@ struct PlayReq {
     video_id: String,
     #[serde(default)]
     from: f64,
+    /// a looped section: what is not heard before it starts and where it ends
+    silent_until: Option<f64>,
+    until: Option<f64>,
     #[serde(flatten)]
     o: AudioOpts,
 }
@@ -197,6 +200,9 @@ pub fn router(st: Arc<State>) -> Router {
             let notes = blocking(move || s.0.song_notes_fingered(&v)).await?;
             Ok::<_, ApiError>(file_response(notes.to_string().into_bytes(), "application/json", &[(header::CACHE_CONTROL, "no-cache".into())]))
         }))
+        .route("/api/song/{vid}/chunks", get(|s: S, Path(v): Path<String>| async move {
+            blocking(move || s.0.song_chunks(&v)).await.map(Json)
+        }))
         .route("/api/song/{vid}/swap-hands", post(|s: S, Path(v): Path<String>| async move {
             blocking(move || s.0.swap_hands(&v).map(|_| json!({"ok": true}))).await.map(Json)
         }))
@@ -245,7 +251,10 @@ pub fn router(st: Arc<State>) -> Router {
             if !s.0.native_audio.load(std::sync::atomic::Ordering::SeqCst) { return Err(ApiError(400, "Native audio is off".into())); }
             let notes = blocking(move || s.0.song_notes(&r.video_id)).await?;
             let a = crate::audio::Audio::get();
-            a.play(notes, r.o.play(r.from.max(0.0)));
+            let mut o = r.o.play(r.from.max(0.0));
+            if let Some(v) = r.silent_until { o.silent_until = v }
+            if let Some(v) = r.until { o.until = v }
+            a.play(notes, o);
             Ok(Json(json!({"pos": a.pos().pos})))
         }))
         .route("/api/audio/stop", post(|s: S| async move {
