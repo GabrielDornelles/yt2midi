@@ -61,6 +61,9 @@ export interface NoteRec {
   end: number
   hand: number
   hue: number | null
+  /** 1 (thumb) to 5, and whether the right hand plays it; worked out by the engine */
+  finger?: number
+  right?: boolean
 }
 
 export interface Pressed {

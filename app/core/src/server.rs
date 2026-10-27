@@ -194,9 +194,8 @@ pub fn router(st: Arc<State>) -> Router {
         .route("/api/song/{vid}", get(|s: S, Path(v): Path<String>| async move { blocking(move || s.0.song(&v)).await.map(Json) })
             .delete(|s: S, Path(v): Path<String>| async move { blocking(move || s.0.delete_song(&v).map(|_| json!({"deleted": v}))).await.map(Json) }))
         .route("/api/song/{vid}/notes", get(|s: S, Path(v): Path<String>| async move {
-            let d = s.0.song_dir(&v)?;
-            let b = read_file(d.join("result.json")).await.map_err(|_| ApiError(404, "No notes yet".into()))?;
-            Ok::<_, ApiError>(file_response(b, "application/json", &[(header::CACHE_CONTROL, "no-cache".into())]))
+            let notes = blocking(move || s.0.song_notes_fingered(&v)).await?;
+            Ok::<_, ApiError>(file_response(notes.to_string().into_bytes(), "application/json", &[(header::CACHE_CONTROL, "no-cache".into())]))
         }))
         .route("/api/song/{vid}/swap-hands", post(|s: S, Path(v): Path<String>| async move {
             blocking(move || s.0.swap_hands(&v).map(|_| json!({"ok": true}))).await.map(Json)

@@ -6,6 +6,7 @@ pub mod color;
 pub mod detect;
 pub mod downloader;
 pub mod export;
+pub mod fingering;
 pub mod keyboard;
 pub mod midi;
 pub mod score;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { NoteRec, Rgb } from '../types'
+import { buildSides, drawHand, poseAt, type Side } from '../lib/hands'
 
 /*
  * The whole piano (88 keys, always the same size) with the music falling onto it from above, the way the original
@@ -23,30 +24,32 @@ interface Props {
   colors: Rgb[]
   /** Which hands are shown (index = hand). */
   on: [boolean, boolean]
+  /** draw the hands and the finger numbers */
+  hands: boolean
   playing: boolean
   pos: number
   getPos: () => number
 }
 
-export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) {
+export function FallingKeys({ notes, colors, on, hands, playing, pos, getPos }: Props) {
   const box = useRef<HTMLDivElement>(null)
   const cv = useRef<HTMLCanvasElement>(null)
   const size = useRef({ w: 0, h: 0, dpr: 1 })
-  const live = useRef({ notes, colors, on, playing, pos, getPos })
-  live.current = { notes, colors, on, playing, pos, getPos }
-  const shape = useRef({ sorted: [] as NoteRec[], maxDur: 0 })
+  const live = useRef({ notes, colors, on, hands, playing, pos, getPos })
+  live.current = { notes, colors, on, hands, playing, pos, getPos }
+  const shape = useRef({ sorted: [] as NoteRec[], maxDur: 0, sides: [] as Side[] })
   const dark = useRef({ v: true, frame: 0, bg: '#1d1915', line: '#3d352e', accent: '#e08e5a' })
 
   useEffect(() => {
     const sorted = [...notes].sort((a, b) => a.start - b.start)
-    shape.current = { sorted, maxDur: sorted.reduce((m, n) => Math.max(m, n.end - n.start), 0) }
+    shape.current = { sorted, maxDur: sorted.reduce((m, n) => Math.max(m, n.end - n.start), 0), sides: buildSides(sorted) }
   }, [notes])
 
   const draw = () => {
     const c = cv.current
     const { w, h, dpr } = size.current
     if (!c || !w) return
-    const L = live.current, { sorted, maxDur } = shape.current
+    const L = live.current, { sorted, maxDur, sides } = shape.current
     const th = dark.current
     if (th.frame++ % 60 === 0) {
       const cs = getComputedStyle(document.documentElement)
@@ -60,8 +63,9 @@ export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) 
     g.clearRect(0, 0, w, h)
     const now = L.playing ? L.getPos() : L.pos
     const kw = w / N_WHITE
-    const keysH = Math.max(64, Math.min(h * 0.3, kw * 7))
-    const top = h - keysH
+    const handH = L.hands ? kw * 3.6 : 0 // room under the keys for the palms
+    const keysH = Math.max(64, Math.min((h - handH) * 0.3, kw * 7))
+    const top = h - handH - keysH
     const pal = L.colors.length ? L.colors : FALLBACK
     const hue = (hand: number) => pal[hand] ?? pal[0]
     const shown = (hand: number) => L.on[hand === 1 ? 1 : 0]
@@ -89,6 +93,10 @@ export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) 
       g.fillStyle = rgba(hue(n.hand), active ? 1 : 0.9)
       g.beginPath(); g.roundRect(x + 1, y0, wd - 2, Math.max(4, y1 - y0 - 1), Math.min(5, wd / 3)); g.fill()
       g.strokeStyle = 'rgba(0,0,0,.28)'; g.lineWidth = 1; g.stroke()
+      if (L.hands && n.finger && y1 - y0 > kw * 0.9) {
+        g.fillStyle = 'rgba(0,0,0,.72)'; g.font = `800 ${Math.max(9, Math.min(22, kw * 0.6))}px ui-sans-serif, system-ui, sans-serif`; g.textAlign = 'center'
+        g.fillText(String(n.finger), x + wd / 2, y1 - Math.max(4, kw * 0.22))
+      }
     }
 
     // keys
@@ -106,7 +114,7 @@ export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) 
       g.fillStyle = hand !== undefined ? 'rgba(0,0,0,.7)' : m % 12 === 0 ? '#5d5348' : '#8a7e71'
       g.font = `${m % 12 === 0 || hand !== undefined ? 800 : 600} ${size}px ui-sans-serif, system-ui, sans-serif`
       g.textAlign = 'center'
-      g.fillText(m % 12 === 0 ? `C${m / 12 - 1}` : LETTER[m % 12], x + kw / 2, h - Math.max(5, size * 0.4))
+      g.fillText(m % 12 === 0 ? `C${m / 12 - 1}` : LETTER[m % 12], x + kw / 2, top + keysH - Math.max(5, size * 0.4))
     }
     for (let m = LOW; m <= HIGH; m++) {
       if (!isBlack(m)) continue
@@ -117,6 +125,17 @@ export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) 
     }
     g.fillStyle = th.accent
     g.fillRect(0, top - 3, w, 2)
+    if (L.hands) {
+      g.fillStyle = th.bg
+      g.fillRect(0, top + keysH, w, handH)
+      g.fillStyle = th.v ? '#0f0c0a' : '#3a3028'
+      g.fillRect(0, top + keysH, w, 3)
+      for (const s of sides) {
+        if (!shown(s.hand)) continue
+        const p = poseAt(s, now)
+        if (p) drawHand(g, p, kw, top + keysH + kw * 0.35, top + keysH * 0.78, top + keysH * 0.34, th.v)
+      }
+    }
   }
 
   useEffect(() => {
@@ -144,7 +163,7 @@ export function FallingKeys({ notes, colors, on, playing, pos, getPos }: Props) 
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, pos, on[0], on[1], notes, colors])
+  }, [playing, pos, on[0], on[1], hands, notes, colors])
 
   return <div className="falling" ref={box} role="img" aria-label="Piano keyboard with the notes falling onto it"><canvas ref={cv} /></div>
 }

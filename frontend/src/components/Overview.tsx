@@ -24,6 +24,8 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
   const [speed, setSpeed] = useState(() => { try { return Number(localStorage.getItem(`speed:${song.video_id}`)) || 100 } catch { return 100 } })
   const [handOn, setHandOn] = useState<[boolean, boolean]>(() => { try { return JSON.parse(localStorage.getItem(`hands:${song.video_id}`) ?? '[true,true]') } catch { return [true, true] } })
   useEffect(() => { try { localStorage.setItem(`speed:${song.video_id}`, String(speed)); localStorage.setItem(`hands:${song.video_id}`, JSON.stringify(handOn)) } catch { /* not remembered */ } }, [speed, handOn, song.video_id])
+  const [hands, setHands] = useState(() => { try { return localStorage.getItem('showHands') !== '0' } catch { return true } })
+  useEffect(() => { try { localStorage.setItem('showHands', hands ? '1' : '0') } catch { /* not remembered */ } }, [hands])
   const playback = useMemo(() => ({ speed: speed / 100, gains: [handOn[0] ? 1 : 0, handOn[1] ? 1 : 0] as [number, number] }), [speed, handOn])
   const player = usePlayer(list, song.video_id, playback)
   const colors = useMemo(() => song.hand_colors ?? [], [song.hand_colors])
@@ -88,6 +90,7 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
                   <input id="speed" type="range" min={25} max={100} step={5} value={speed} onChange={(e) => setSpeed(Number(e.target.value))} />
                   {[50, 75, 100].map((v) => <button key={v} className={`btn small ${speed === v ? 'primary' : ''}`} onClick={() => setSpeed(v)}>{v}</button>)}
                 </span>
+                <button className={`btn small ${hands ? 'primary' : ''}`} aria-pressed={hands} onClick={() => setHands((v) => !v)}>Fingering</button>
                 <button className="btn small" onClick={full ? closeFull : openFull}>{full ? 'Exit full screen' : 'Full screen'}</button>
               </div>
               <div className="player handrow" role="group" aria-label="Hands">
@@ -103,7 +106,7 @@ export function Overview({ song, reload }: { song: Song; reload: () => void }) {
               </div>
               <div className="slim"><PianoRoll notes={list} colors={colors} duration={player.duration} pos={player.pos} onSeek={player.seek} /></div>
               </div>
-              <FallingKeys notes={list} colors={colors} on={handOn} playing={player.playing} pos={player.pos} getPos={player.getPos} />
+              <FallingKeys notes={list} colors={colors} on={handOn} hands={hands} playing={player.playing} pos={player.pos} getPos={player.getPos} />
             </div>
           )}
         </div>

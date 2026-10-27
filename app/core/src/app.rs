@@ -241,6 +241,20 @@ impl State {
         Ok(v.iter().map(|n| crate::audio::NoteEv { midi: n["midi"].as_i64().unwrap_or(60) as i32, start: n["start"].as_f64().unwrap_or(0.0), end: n["end"].as_f64().unwrap_or(0.0), hand: n["hand"].as_i64().unwrap_or(0) as i32 }).collect())
     }
 
+    /// The notes of a song with the finger for each (1 = thumb to 5) and whether the right hand plays it.
+    pub fn song_notes_fingered(&self, vid: &str) -> ApiRes<Value> {
+        let d = self.song_dir(vid)?;
+        let mut v = read_json(&d.join("result.json")).and_then(|v| v.as_array().cloned()).ok_or_else(|| not_found("No notes yet"))?;
+        let input: Vec<crate::fingering::In> = v.iter().map(|n| crate::fingering::In {
+            midi: n["midi"].as_i64().unwrap_or(60) as i32, start: n["start"].as_f64().unwrap_or(0.0), hand: n["hand"].as_i64().unwrap_or(0) as i32,
+        }).collect();
+        for (n, (finger, right)) in v.iter_mut().zip(crate::fingering::assign(&input)) {
+            n["finger"] = json!(finger);
+            n["right"] = json!(right);
+        }
+        Ok(Value::Array(v))
+    }
+
     pub fn title(&self, vid: &str) -> String {
         read_json(&self.work.join(vid).join("meta.json")).and_then(|m| m["title"].as_str().map(str::to_string)).unwrap_or_else(|| vid.to_string())
     }
