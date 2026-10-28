@@ -140,6 +140,12 @@ fn step(a: &State, b: &State, gap: f64, right: bool, held: &[i32]) -> f64 {
                     if span > comf { c += 1.5 * (span - comf) }
                     if span > prac { c += 8.0 * (span - prac) }
                 }
+            } else if !melodic && gap < 0.4 && (a.n.len() == 1 || b.n.len() == 1) && f1.min(f2) > 1 && {
+                let d = (m2 - m1) as f64;
+                (if f2 > f1 { if right { d } else { -d } } else if right { -d } else { d }) < 1.0
+            } {
+                // next to a chord, one finger still cannot pass over another finger
+                c += 30.0 + 20.0 * (0.4 - gap);
             } else if melodic {
                 let d = (m2 - m1) as f64;
                 // how far the second finger's key lies from the first's, counted outward (towards the little finger)
@@ -148,7 +154,8 @@ fn step(a: &State, b: &State, gap: f64, right: bool, held: &[i32]) -> f64 {
                 if span < 1.0 {
                     // one finger crosses another: thumb under or finger over
                     let ok = lo == 1 && -span <= behind(hi);
-                    c += if ok { 2.0 + 0.8 * (hi as f64 - 2.0) } else { 6.0 + 3.0 * (1.0 - span) };
+                    // only the thumb passes under (or a finger over it); two other fingers cannot cross, least of all quickly
+                    c += if ok { 2.0 + 0.8 * (hi as f64 - 2.0) } else if lo == 1 { 6.0 + 3.0 * (1.0 - span) } else { 30.0 + 10.0 * (1.0 - span) + 20.0 * (0.5 - gap).max(0.0) };
                     if f2 == 1 && is_black(m2) { c += 1.0 }
                 } else {
                     let (comf, prac) = reach(lo, hi);
@@ -322,6 +329,19 @@ mod tests {
             assert_ne!(f[1], 5, "{f:?}");
             assert!(f[2] != f[1], "{f:?}");
         }
+    }
+
+    #[test]
+    fn fingers_do_not_cross_each_other_quickly() {
+        // thumb and little finger together, then the key above the little finger's: the 4th finger cannot reach over it
+        let n = vec![
+            In { midi: 60, start: 0.0, end: 1.0, hand: 0 },
+            In { midi: 67, start: 0.0, end: 0.2, hand: 0 },
+            In { midi: 67, start: 0.25, end: 0.4, hand: 0 },
+            In { midi: 68, start: 0.4, end: 0.6, hand: 0 },
+        ];
+        let f = fingers(&n);
+        assert!(!(f[1] == 5 && f[3] == 4), "{f:?}");
     }
 
     #[test]
