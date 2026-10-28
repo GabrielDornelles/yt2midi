@@ -15,6 +15,8 @@
 pub struct In {
     pub midi: i32,
     pub start: f64,
+    /// when the key comes up again; a note still down while the next one starts ties its finger up
+    pub end: f64,
     pub hand: i32,
 }
 
@@ -113,15 +115,31 @@ fn states(pitches: &[i32], right: bool) -> Vec<State> {
     out
 }
 
-fn step(a: &State, b: &State, gap: f64, right: bool) -> f64 {
+/// `held` says which of a's notes are still down when b starts, by pitch.
+fn step(a: &State, b: &State, gap: f64, right: bool, held: &[i32]) -> f64 {
     let free = (1.0 + 6.0 * gap).min(12.0);
     let mut c = 0.5 * ((b.pos - a.pos).abs() - free).max(0.0);
     let melodic = a.n.len() == 1 && b.n.len() == 1;
     for &(m1, f1) in &a.n {
+        let down = held.contains(&m1);
         for &(m2, f2) in &b.n {
             if f1 == f2 {
                 if m1 != m2 { c += 5.0 + 0.5 * (m2 - m1).abs() as f64 * (1.0 - gap.min(0.5)); }
                 else if gap < 0.25 { c += 0.5 }
+                if down && m1 != m2 { c += 40.0 } // a finger cannot play while it holds another key
+            } else if down && m1 != m2 {
+                // both keys are down at once: the fingers keep the order of the keys, as in a chord. Only the thumb may
+                // be held while another finger goes over it (or goes under a held finger), and even that is awkward.
+                let d = (m2 - m1) as f64;
+                let span = if f2 > f1 { if right { d } else { -d } } else if right { -d } else { d };
+                let (lo, hi) = (f1.min(f2), f1.max(f2));
+                if span < 1.0 {
+                    c += if lo == 1 { 10.0 + 3.0 * (1.0 - span) } else { 40.0 + 5.0 * (1.0 - span) };
+                } else {
+                    let (comf, prac) = reach(lo, hi);
+                    if span > comf { c += 1.5 * (span - comf) }
+                    if span > prac { c += 8.0 * (span - prac) }
+                }
             } else if melodic {
                 let d = (m2 - m1) as f64;
                 // how far the second finger's key lies from the first's, counted outward (towards the little finger)
@@ -196,6 +214,8 @@ fn hand(notes: &[In], idx: &[usize], right: bool) -> Vec<u8> {
             m
         })
         .collect();
+    // which keys of each event are still down at a given time
+    let ends: Vec<Vec<(i32, f64)>> = events.iter().map(|(_, v)| v.iter().map(|&p| (notes[idx[p]].midi, notes[idx[p]].end)).collect()).collect();
     let all: Vec<Vec<State>> = pitches.iter().map(|p| states(p, right)).collect();
     // Viterbi
     let mut cost: Vec<Vec<f64>> = Vec::with_capacity(all.len());
@@ -207,10 +227,11 @@ fn hand(notes: &[In], idx: &[usize], right: bool) -> Vec<u8> {
             continue;
         }
         let gap = events[e].0 - events[e - 1].0;
+        let held: Vec<i32> = ends[e - 1].iter().filter(|&&(_, end)| end > events[e].0 + 0.12).map(|&(m, _)| m).collect();
         let mut c = Vec::with_capacity(ss.len());
         let mut f = Vec::with_capacity(ss.len());
         for s in ss {
-            let (bi, bc) = all[e - 1].iter().enumerate().map(|(i, p)| (i, cost[e - 1][i] + step(p, s, gap, right))).fold((0, f64::MAX), |a, b| if b.1 < a.1 { b } else { a });
+            let (bi, bc) = all[e - 1].iter().enumerate().map(|(i, p)| (i, cost[e - 1][i] + step(p, s, gap, right, &held))).fold((0, f64::MAX), |a, b| if b.1 < a.1 { b } else { a });
             c.push(bc + s.own);
             f.push(bi);
         }
@@ -240,7 +261,7 @@ mod tests {
     use super::*;
 
     fn line(pitches: &[i32], gap: f64, hand: i32) -> Vec<In> {
-        pitches.iter().enumerate().map(|(i, &m)| In { midi: m, start: i as f64 * gap, hand }).collect()
+        pitches.iter().enumerate().map(|(i, &m)| In { midi: m, start: i as f64 * gap, end: i as f64 * gap + gap * 0.9, hand }).collect()
     }
     fn fingers(n: &[In]) -> Vec<u8> {
         assign(n).iter().map(|x| x.0).collect()
@@ -266,7 +287,7 @@ mod tests {
 
     #[test]
     fn chords_follow_the_hand() {
-        let c = |a: &[i32], hand| a.iter().map(|&m| In { midi: m, start: 0.0, hand }).collect::<Vec<_>>();
+        let c = |a: &[i32], hand| a.iter().map(|&m| In { midi: m, start: 0.0, end: 1.0, hand }).collect::<Vec<_>>();
         assert_eq!(fingers(&c(&[60, 64, 67], 0)), vec![1, 3, 5]);
         assert_eq!(fingers(&c(&[36, 40, 43], 0)), vec![5, 3, 1]);
     }
@@ -287,11 +308,28 @@ mod tests {
     }
 
     #[test]
+    fn a_held_key_keeps_its_finger_in_order() {
+        // the key an octave up is held while the next, higher one is played: the finger for it cannot be the little finger
+        for right in [true, false] {
+            let up = |m: i32| if right { m } else { 120 - m };
+            let n = vec![
+                In { midi: up(64), start: 0.0, end: 0.25, hand: 0 },
+                In { midi: up(72), start: 0.3, end: 1.5, hand: 0 },
+                In { midi: up(74), start: 0.6, end: 0.8, hand: 0 },
+                In { midi: up(72), start: 1.0, end: 1.2, hand: 0 },
+            ];
+            let f = fingers(&n);
+            assert_ne!(f[1], 5, "{f:?}");
+            assert!(f[2] != f[1], "{f:?}");
+        }
+    }
+
+    #[test]
     fn big_chords_and_repeats_do_not_break() {
         let mut n = vec![];
         for (i, m) in [48, 52, 55, 60, 64, 67, 72].iter().enumerate() {
-            n.push(In { midi: *m, start: 0.0, hand: 0 });
-            n.push(In { midi: *m, start: 1.0 + i as f64 * 0.1, hand: 0 });
+            n.push(In { midi: *m, start: 0.0, end: 0.5, hand: 0 });
+            n.push(In { midi: *m, start: 1.0 + i as f64 * 0.1, end: 1.5, hand: 0 });
         }
         assert!(fingers(&n).iter().all(|f| (1..=5).contains(f)));
     }

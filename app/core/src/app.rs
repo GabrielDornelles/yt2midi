@@ -246,7 +246,7 @@ impl State {
         let d = self.song_dir(vid)?;
         let mut v = read_json(&d.join("result.json")).and_then(|v| v.as_array().cloned()).ok_or_else(|| not_found("No notes yet"))?;
         let input: Vec<crate::fingering::In> = v.iter().map(|n| crate::fingering::In {
-            midi: n["midi"].as_i64().unwrap_or(60) as i32, start: n["start"].as_f64().unwrap_or(0.0), hand: n["hand"].as_i64().unwrap_or(0) as i32,
+            midi: n["midi"].as_i64().unwrap_or(60) as i32, start: n["start"].as_f64().unwrap_or(0.0), end: n["end"].as_f64().unwrap_or(0.0), hand: n["hand"].as_i64().unwrap_or(0) as i32,
         }).collect();
         for (n, (finger, right)) in v.iter_mut().zip(crate::fingering::assign(&input)) {
             n["finger"] = json!(finger);
